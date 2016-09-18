@@ -1,0 +1,107 @@
+---
+title: "Instrumental Variable Approach"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(data.table)
+library(doBy)
+library(car)
+library(AER) 
+library(visreg) 
+vars <- c("sex", "educ", "age", "mawork14", "race", "vote08")
+sub = data.table::fread(
+  file.choose(),
+  sep = ",",
+  select = vars)
+sub <- na.omit(sub)
+sub$vote08=ifelse(sub$vote08==1,1,0)
+sub$mawork14=ifelse(sub$mawork14==1,1,0)
+sub$female=ifelse(sub$sex==2,1,0)
+sub$black=ifelse(sub$race==2,1,0)
+```
+
+### *Research Topic*
+
+I would like to study if higher education level makes people more engaged in political participations, such as voting. Alternatively speaking, I would like to know if people have higher chance to vote in elections if they receive higher education.
+
+More education means that one has better opportunity to learn more knowledge about political science, economics, and social sciences. After they learn these knowledges, people may have more thoughts about their country and more motivations to use their right to support the candidate that shares same value with them. Therefore, I expect that more education leads to higher participation rate in vote.
+
+### *Data*
+
+I used several variables from General Social Survey (GSS) in my model.
+
+The dependent variable is vote08, question "did you vote in the 2008 presidential election". Answers range from "Ineligible", "Did not vote" and "Voted". 
+
+![](GSS III 1.png)
+
+I converted this variable to a dummy variable which 1 for voted and 0 for not voted.
+
+My key independent variable is the highest grade you finished, ranging from no formal school (0) to 20, which means graduate degree. 
+
+![](GSS III 2.png)
+
+Other independent variables include gender (1 for female and 0 for male), age, and black race (1 for black and 0 for other races).
+
+### *Descriptive Statistics*
+
+```{r}
+summaryBy(educ~vote08, data=sub, FUN=c(mean, sd), na.rm=T)
+```
+
+From the table above, we can see the average education level of people voted is higher than that of people who did not vote. Therefore, we can tell that education can be good predictors to vote, and expect positive relationship between education level and one's chance to vote.
+
+### *Model and Analysis*
+
+I first run a naïve multiple OLS regression. In this model, I use variables "educ", "age", "black", and "female" to predict the probability of if one voted in the 2008 presidential election. 
+
+```{r pressure, echo=FALSE}
+lm <- lm(vote08 ~ educ + age + black + female, data = sub)
+summary(lm)
+```
+
+My expectation is confirmed by the model. The variable "education" is statistically significant and indicates that one level higher in education leads to 0.04997 more units in voting on average. 
+
+However, the OLS regression model cannot overcome the omitted variable bias issue. There might be omitted variables in the error term that are correlated with the independent variable "education" and dependent variable "vote". For example, one's family education can impact on one's education level and one's participation in vote, if his/her parents give him/her strong opinion that vote is very important. In the case of omitted variable bias, the variable "education" becomes endogenous and the coefficient of the variable is biased. 
+
+An instrumental variable approach can overcome omitted variable bias by using an instrument. An instrument should correlate with the independent variable X (the endogenous variable), uncorrelated with error term u, and has no direct effect on the dependent variable.
+
+After choosing an instrument, one should run a regression model using the instrument and other variables as independent variable and the endogenous variable as dependent variable, and gather the predicted value for the endogenous variable. Then, one should run a regression model using the predicted value for the endogenous variable and other variables as independent variables and the original dependent variable as dependent variable. By doing so, the endogenous variable should not be endogenously correlated with the dependent variable and therefore overcome the omitted variable bias. 
+
+My instrument is "did you mother work after you were born and before you were 14". This is a dummy variable that 1 for work, 0 for not.
+
+![](GSS III 3.png)
+
+I choose this instrument because it meets the theoretical assumptions of instrument. First, it correlates with the variable "education" because the family may be more financially sufficient if both parents work and can provide more supports on children's education. Second, it is uncorrelated with the error term. Whether mother works or not should have no impact on one's personality. Last, it has no direct effect on vote. Whether mother works or not should have no impact on if one votes or not.
+
+Then I ran an instrument variable model by using the instrument.
+
+```{r}
+iv = ivreg(vote08 ~ educ + age + black + female | mawork14 + age + black + female, data = sub)
+summary(iv, diagnostics=T)
+```
+
+Like the OLS model above, the variable "education" is still statistically significant after adding the instrument, and indicates that one level higher in education leads to 0.089 more units in voting. Therefore, the coefficient of education on vote increases in the instrument variable model, after controlling the omitted variable bias that underestimates the coefficient in OLS model.
+
+The F-test is 35.161, which is much greater than 10. Therefore, the instrument is not weak. The Hausman Wu test for endogeneity is statistically significant at 10% level so we can reject the null hypothesis that "education" is exogenous at 10% level. This shows that the evidence of the variable "education" is endogenous is not really strong. However, we still should employ instrumental variable approach since that variable "education" is somewhat endogenous. 
+
+I have run two additional OLS models for the diagnostics. 
+
+```{r}
+lm.strong = lm(educ ~ mawork14, data =sub)
+summary(lm.strong)
+```
+
+In the OLS model testing the relationship between education and mother works above, the variable "did mother work" is statistically significant and indicates that the fact that mother works leads to 1.0292 more units in education. This also confirms one of the theoretical assumptions that the instrument is correlated with the endogenous variable. 
+
+```{r}
+lm.validity = lm(vote08 ~ mawork14, data =sub)
+summary(lm.validity)
+```
+
+In the OLS model testing the relationship between "vote" and "did mother works" above, the variable "did mother work" is not statistically significant to dependent variable "vote". This also confirms one of the theoretical assumptions that the instrument is uncorrelated with the dependent variable. 
+
+### *Conclusion*
+
+Overall speaking, I have picked a meaningful and useful instrument. By the results from the OLS model and instrument variable model, I have confirmed my hypothesis that higher education leads to higher chance to vote. The instrument variable approach has successfully dealt with the omitted variable bias issue in the OLS model. 
+
